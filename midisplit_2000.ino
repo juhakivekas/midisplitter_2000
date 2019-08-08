@@ -8,7 +8,7 @@
 #include <MIDI.h>
 
 //use the hardware serial RX and TX pins for MIDI
-MIDI_CREATE_INSTANCE(HardwareSerial, Serial,  MIDI);
+MIDI_CREATE_DEFAULT_INSTANCE();
 
 //since this splits polyphony to different MIDI channels, we have max 16 voices
 #define CHANNELS 16

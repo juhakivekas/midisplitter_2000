@@ -5,7 +5,8 @@
 
 //CONNECTIONS
 // RX and TX are the MIDI in and outs
-// Pin 2 will select between stacking and cycling modes depending on if it's connected to VCC or GND
+// Pin 2 will select between stacking and cycling polyphony modes
+// Pin 3 will select between poly and unison modes
 
 
 //see github for MIDI library installation and usage guide:
@@ -18,9 +19,11 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 //this array is used to store the state of what notes are playing on what channels
 volatile byte pitches[CHANNELS];
 int modeSwitchPin = 2;
-int state, laststate = -1;
+int unisonSwitchPin = 3;
+int mode, lastmode = -1;
+int unison, lastunison = -1;
 
-void splitNoteOn(byte channel, byte pitch, byte velocity) {
+void splitNoteOnStack(byte channel, byte pitch, byte velocity) {
   bool found = false;
   int i;
   //find a free/silent voice
@@ -76,6 +79,22 @@ void splitNoteOff(byte channel, byte pitch, byte velocity) {
   //if the pitch wasn't found on any channel, then events are dropped
 }
 
+void unisonNoteOn(byte channel, byte pitch, byte velocity) {
+  int i;
+  //send message to all channels
+  for(i=0; i<CHANNELS; i++){
+    MIDI.sendNoteOn(pitch, velocity, i+1);
+  }
+}
+
+void unisonNoteOff(byte channel, byte pitch, byte velocity) {
+  int i;
+  //send message to all channels
+  for(i=0; i<CHANNELS; i++){
+    MIDI.sendNoteOff(pitch, velocity, i+1);
+  }
+}
+
 void setup() {
   //set all channels to free/silent
   memset(pitches, 0, CHANNELS);
@@ -93,17 +112,27 @@ void loop() {
   //all code ecexution is driven by the MIDI library that receives MIDI events
   //(https://en.wikipedia.org/wiki/Event-driven_programming)
   MIDI.read();
-  state = digitalRead(modeSwitchPin);
-  if(state == laststate){
+
+  //check if mode switches have changed
+  mode = digitalRead(modeSwitchPin);
+  unison = digitalRead(unisonSwitchPin);
+  if(mode == lastmode && unison == lastunison){
     //this is just to avoid setting the HandleNoteOn functions too often, setting them constantly
     //sounds glitch prone, so we just skip the rest of the loop if the switch state hasn't changed
     return;
   }
 
-  if(state == HIGH){
+  //set mode according to switch states
+  if(unison == HIGH){
+    MIDI.setHandleNoteOn(unisonNoteOn);
+    MIDI.setHandleNoteOff(unisonNoteOff);
+  }else if(mode == HIGH){
     MIDI.setHandleNoteOn(splitNoteOnCyclic);
+    MIDI.setHandleNoteOff(splitNoteOff);
   }else{
-    MIDI.setHandleNoteOn(splitNoteOn);
+    MIDI.setHandleNoteOn(splitNoteOnStack);
+    MIDI.setHandleNoteOff(splitNoteOff);
   }
-  laststate = state;
+  lastmode = mode;
+  lastunison = unison;
 }
